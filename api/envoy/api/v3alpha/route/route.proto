@@ -9,6 +9,7 @@ option java_package = "io.envoyproxy.envoy.api.v3alpha.route";
 import "envoy/api/v3alpha/core/base.proto";
 import "envoy/type/matcher/v3alpha/regex.proto";
 import "envoy/type/matcher/v3alpha/string.proto";
+import "envoy/type/matcher/v3alpha/route.proto";
 import "envoy/type/v3alpha/percent.proto";
 import "envoy/type/v3alpha/range.proto";
 
@@ -153,7 +154,7 @@ message VirtualHost {
 // .. attention::
 //
 //   Envoy supports routing on HTTP method via :ref:`header matching
-//   <envoy_api_msg_api.v3alpha.route.HeaderMatcher>`.
+//   <envoy_api_msg_api.v3alpha.route.type.matcher.v3alpha.HeaderMatcher>`.
 // [#next-free-field: 17]
 message Route {
   reserved 6, 8;
@@ -385,14 +386,14 @@ message RouteMatch {
   // config. A match will happen if all the headers in the route are present in
   // the request with the same values (or based on presence if the value field
   // is not in the config).
-  repeated HeaderMatcher headers = 6;
+  repeated type.matcher.v3alpha.HeaderMatcher headers = 6;
 
   // Specifies a set of URL query parameters on which the route should
   // match. The router will check the query string from the *path* header
   // against all the specified query parameters. If the number of specified
   // query parameters is nonzero, they all must match the *path* header's
   // query string for a match to occur.
-  repeated QueryParameterMatcher query_parameters = 7;
+  repeated type.matcher.v3alpha.QueryParameterMatcher query_parameters = 7;
 
   // If specified, only gRPC requests will be matched. The router will check
   // that the content-type header has a application/grpc or one of the various
@@ -889,10 +890,10 @@ message RetryPolicy {
   // HTTP response headers that trigger a retry if present in the response. A retry will be
   // triggered if any of the header matches match the upstream response headers.
   // The field is only consulted if 'retriable-headers' retry policy is active.
-  repeated HeaderMatcher retriable_headers = 9;
+  repeated type.matcher.v3alpha.HeaderMatcher retriable_headers = 9;
 
   // HTTP headers which must be present in the request for retries to be attempted.
-  repeated HeaderMatcher retriable_request_headers = 10;
+  repeated type.matcher.v3alpha.HeaderMatcher retriable_request_headers = 10;
 }
 
 // HTTP request hedging :ref:`architecture overview <arch_overview_http_routing_hedging>`.
@@ -1062,7 +1063,7 @@ message VirtualCluster {
   // Specifies a list of header matchers to use for matching requests. Each specified header must
   // match. The pseudo-headers `:path` and `:method` can be used to match the request path and
   // method, respectively.
-  repeated HeaderMatcher headers = 4;
+  repeated type.matcher.v3alpha.HeaderMatcher headers = 4;
 
   // Specifies the name of the virtual cluster. The virtual cluster name as well
   // as the virtual host name are used when emitting statistics. The statistics are emitted by the
@@ -1160,7 +1161,7 @@ message RateLimit {
       // specified headers in the config. A match will happen if all the
       // headers in the config are present in the request with the same values
       // (or based on presence if the value field is not in the config).
-      repeated HeaderMatcher headers = 3 [(validate.rules).repeated = {min_items: 1}];
+      repeated type.matcher.v3alpha.HeaderMatcher headers = 3 [(validate.rules).repeated = {min_items: 1}];
     }
 
     oneof action_specifier {
@@ -1205,112 +1206,4 @@ message RateLimit {
   // configuration. See :ref:`composing actions
   // <config_http_filters_rate_limit_composing_actions>` for additional documentation.
   repeated Action actions = 3 [(validate.rules).repeated = {min_items: 1}];
-}
-
-// .. attention::
-//
-//   Internally, Envoy always uses the HTTP/2 *:authority* header to represent the HTTP/1 *Host*
-//   header. Thus, if attempting to match on *Host*, match on *:authority* instead.
-//
-// .. attention::
-//
-//   To route on HTTP method, use the special HTTP/2 *:method* header. This works for both
-//   HTTP/1 and HTTP/2 as Envoy normalizes headers. E.g.,
-//
-//   .. code-block:: json
-//
-//     {
-//       "name": ":method",
-//       "exact_match": "POST"
-//     }
-//
-// .. attention::
-//   In the absence of any header match specifier, match will default to :ref:`present_match
-//   <envoy_api_field_api.v3alpha.route.HeaderMatcher.present_match>`. i.e, a request that has the
-//   :ref:`name <envoy_api_field_api.v3alpha.route.HeaderMatcher.name>` header will match,
-//   regardless of the header's value.
-//
-//  [#next-major-version: HeaderMatcher should be refactored to use StringMatcher.]
-// [#next-free-field: 12]
-message HeaderMatcher {
-  reserved 2, 3, 5;
-
-  reserved "regex_match";
-
-  // Specifies the name of the header in the request.
-  string name = 1 [(validate.rules).string = {min_bytes: 1}];
-
-  // Specifies how the header match will be performed to route the request.
-  oneof header_match_specifier {
-    // If specified, header match will be performed based on the value of the header.
-    string exact_match = 4;
-
-    // If specified, this regex string is a regular expression rule which implies the entire request
-    // header value must match the regex. The rule will not match if only a subsequence of the
-    // request header value matches the regex.
-    type.matcher.v3alpha.RegexMatcher safe_regex_match = 11;
-
-    // If specified, header match will be performed based on range.
-    // The rule will match if the request header value is within this range.
-    // The entire request header value must represent an integer in base 10 notation: consisting of
-    // an optional plus or minus sign followed by a sequence of digits. The rule will not match if
-    // the header value does not represent an integer. Match will fail for empty values, floating
-    // point numbers or if only a subsequence of the header value is an integer.
-    //
-    // Examples:
-    //
-    // * For range [-10,0), route will match for header value -1, but not for 0, "somestring", 10.9,
-    //   "-1somestring"
-    type.v3alpha.Int64Range range_match = 6;
-
-    // If specified, header match will be performed based on whether the header is in the
-    // request.
-    bool present_match = 7;
-
-    // If specified, header match will be performed based on the prefix of the header value.
-    // Note: empty prefix is not allowed, please use present_match instead.
-    //
-    // Examples:
-    //
-    // * The prefix *abcd* matches the value *abcdxyz*, but not for *abcxyz*.
-    string prefix_match = 9 [(validate.rules).string = {min_bytes: 1}];
-
-    // If specified, header match will be performed based on the suffix of the header value.
-    // Note: empty suffix is not allowed, please use present_match instead.
-    //
-    // Examples:
-    //
-    // * The suffix *abcd* matches the value *xyzabcd*, but not for *xyzbcd*.
-    string suffix_match = 10 [(validate.rules).string = {min_bytes: 1}];
-  }
-
-  // If specified, the match result will be inverted before checking. Defaults to false.
-  //
-  // Examples:
-  //
-  // * The regex ``\d{3}`` does not match the value *1234*, so it will match when inverted.
-  // * The range [-10,0) will match the value -1, so it will not match when inverted.
-  bool invert_match = 8;
-}
-
-// Query parameter matching treats the query string of a request's :path header
-// as an ampersand-separated list of keys and/or key=value elements.
-// [#next-free-field: 7]
-message QueryParameterMatcher {
-  reserved 3, 4;
-
-  reserved "value", "regex";
-
-  // Specifies the name of a key that must be present in the requested
-  // *path*'s query string.
-  string name = 1 [(validate.rules).string = {min_bytes: 1 max_bytes: 1024}];
-
-  oneof query_parameter_match_specifier {
-    // Specifies whether a query parameter value should match against a string.
-    type.matcher.v3alpha.StringMatcher string_match = 5
-        [(validate.rules).message = {required: true}];
-
-    // Specifies whether a query parameter should be present.
-    bool present_match = 6;
-  }
 }
