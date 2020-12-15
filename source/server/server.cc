@@ -422,16 +422,6 @@ void InstanceImpl::initialize(const Options& options,
   heap_shrinker_ =
       std::make_unique<Memory::HeapShrinker>(*dispatcher_, *overload_manager_, stats_store_);
 
-  for (const auto& bootstrap_extension : bootstrap_.bootstrap_extensions()) {
-    auto& factory = Config::Utility::getAndCheckFactory<Configuration::BootstrapExtensionFactory>(
-        bootstrap_extension);
-    auto config = Config::Utility::translateAnyToFactoryConfig(
-        bootstrap_extension.typed_config(), messageValidationContext().staticValidationVisitor(),
-        factory);
-    bootstrap_extensions_.push_back(
-        factory.createBootstrapExtension(*config, serverFactoryContext()));
-  }
-
   // Register the fatal actions.
   {
     FatalAction::FatalActionPtrList safe_actions;
@@ -533,6 +523,16 @@ void InstanceImpl::initialize(const Options& options,
   // is constructed as part of the InstanceImpl and then populated once
   // cluster_manager_factory_ is available.
   config_.initialize(bootstrap_, *this, *cluster_manager_factory_);
+
+  for (const auto& bootstrap_extension : bootstrap_.bootstrap_extensions()) {
+    auto& factory = Config::Utility::getAndCheckFactory<Configuration::BootstrapExtensionFactory>(
+        bootstrap_extension);
+    auto config = Config::Utility::translateAnyToFactoryConfig(
+        bootstrap_extension.typed_config(), messageValidationContext().staticValidationVisitor(),
+        factory);
+    bootstrap_extensions_.push_back(
+        factory.createBootstrapExtension(*config, serverFactoryContext()));
+  }
 
   // Instruct the listener manager to create the LDS provider if needed. This must be done later
   // because various items do not yet exist when the listener manager is created.
